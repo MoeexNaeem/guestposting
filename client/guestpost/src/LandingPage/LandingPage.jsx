@@ -1,5 +1,5 @@
 import React from 'react';
-import {Navbar} from './components/Navbar'; // Assuming Footer is in the same file as Navbar
+import {Navbar} from './components/Navbar'; 
 import Hero from './components/Hero';
 import MarketPreview from './components/MarketPreview';
 import Services from './components/Services';
