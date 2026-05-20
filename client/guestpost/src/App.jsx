@@ -21,7 +21,7 @@ import EditListing from "./pages/EditListing";
 
 /**
  * Enhanced ProtectedRoute
- * @param {Array} allowedRoles - e.g., ['seller', 'admin']
+ * @param {Array} allowedRoles 
  */
 const ProtectedRoute = ({ children, allowedRoles = [] }) => {
   const userInfoString = localStorage.getItem("userInfo");

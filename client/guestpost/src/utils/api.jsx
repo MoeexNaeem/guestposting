@@ -1,7 +1,8 @@
 import axios from 'axios';
 
 const api = axios.create({
-  baseURL: `https://guestpostinglive.netlify.app/api`, 
+  // Use a relative path so it automatically uses guestposting.live/api
+  baseURL: '/api', 
   headers: {
     'Content-Type': 'application/json',
   },

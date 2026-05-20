@@ -20,7 +20,7 @@ import {
   LayoutDashboard,
 } from "lucide-react";
 
-const socket = io.connect("https://guestpostinglive.netlify.app"); 
+const socket = io.connect("http://localhost:5000");
 
 const Layout = ({ children }) => {
   const navigate = useNavigate();

@@ -2,6 +2,7 @@ const express = require('express');
 const dotenv = require('dotenv');
 const cors = require('cors');
 const http = require('http');
+const path = require('path'); // ADD THIS
 const { Server } = require('socket.io');
 const connectDB = require('./config/db');
 const contactRoutes = require('./routes/contactRoutes');
@@ -10,9 +11,17 @@ dotenv.config();
 connectDB();
 
 const app = express();
-app.use(cors());
+
+// UPDATE CORS: Use environment variable or your live domain
+const allowedOrigin = process.env.FRONTEND_URL || "https://guestposting.live";
+
+app.use(cors({
+    origin: allowedOrigin,
+    methods: ["GET", "POST"]
+}));
 app.use(express.json());
 
+// API Routes
 app.use('/api/auth', require('./routes/authRoutes'));
 app.use('/api/listings', require('./routes/listingRoutes'));
 app.use('/api/orders', require('./routes/orderRoutes'));
@@ -23,45 +32,63 @@ app.use('/api/reviews', require('./routes/reviewRoutes'));
 app.use('/api/admin', require('./routes/adminRoutes'));
 app.use('/api/contact', contactRoutes);
 
+// --- ADDED FOR PRODUCTION ---
+// 1. Serve the static files from the React/Vite build
+app.use(express.static(path.join(__dirname, 'dist')));
+
+// 2. The "Catch-all" handler: for any request that doesn't match an API route,
+// send back the index.html file so React Router works.
+app.get('*', (req, res) => {
+    if (!req.path.startsWith('/api')) {
+        res.sendFile(path.join(__dirname, 'dist', 'index.html'));
+    }
+});
+// -----------------------------
+
 const server = http.createServer(app);
+
+// UPDATE SOCKET.IO ORIGIN
 const io = new Server(server, {
-  cors: { origin: "https://guestpostinglive.netlify.app", methods: ["GET", "POST"] }
+    cors: { 
+        origin: allowedOrigin, 
+        methods: ["GET", "POST"] 
+    }
 });
 
 const connectedUsers = new Map(); 
 
 io.on("connection", (socket) => {
-  socket.on("identify", (userId) => {
-    connectedUsers.set(userId, socket.id);
-    console.log(`User ${userId} is online.`);
-  });
+    socket.on("identify", (userId) => {
+        connectedUsers.set(userId, socket.id);
+        console.log(`User ${userId} is online.`);
+    });
 
-  socket.on("join_order", (orderId) => {
-    socket.join(orderId);
-  });
+    socket.on("join_order", (orderId) => {
+        socket.join(orderId);
+    });
 
-  socket.on("send_message", (data) => {
-    socket.to(data.orderId).emit("receive_message", data);
+    socket.on("send_message", (data) => {
+        socket.to(data.orderId).emit("receive_message", data);
 
-    const recipientSocket = connectedUsers.get(data.recipientId);
-    if (recipientSocket) {
-      io.to(recipientSocket).emit("new_notification", {
-        message: data.notificationText || "New message received",
-        link: `/orders/${data.orderId}`,
-        isRead: false
-      });
-    }
-  });
+        const recipientSocket = connectedUsers.get(data.recipientId);
+        if (recipientSocket) {
+            io.to(recipientSocket).emit("new_notification", {
+                message: data.notificationText || "New message received",
+                link: `/orders/${data.orderId}`,
+                isRead: false
+            });
+        }
+    });
 
-  socket.on("disconnect", () => {
-    for (let [userId, socketId] of connectedUsers.entries()) {
-      if (socketId === socket.id) {
-        connectedUsers.delete(userId);
-        break;
-      }
-    }
-  });
+    socket.on("disconnect", () => {
+        for (let [userId, socketId] of connectedUsers.entries()) {
+            if (socketId === socket.id) {
+                connectedUsers.delete(userId);
+                break;
+            }
+        }
+    });
 });
 
 const PORT = process.env.PORT || 5000;
-server.listen(PORT, () => console.log(`Server on port ${PORT}`));
+server.listen(PORT, () => console.log(`Server running on port ${PORT}`));
