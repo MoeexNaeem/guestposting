@@ -38,7 +38,7 @@ app.use(express.static(path.join(__dirname, 'dist')));
 
 // 2. The "Catch-all" handler: for any request that doesn't match an API route,
 // send back the index.html file so React Router works.
-app.get('*', (req, res) => {
+app.get('/{*path}', (req, res) => {
     if (!req.path.startsWith('/api')) {
         res.sendFile(path.join(__dirname, 'dist', 'index.html'));
     }

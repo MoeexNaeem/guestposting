@@ -13,9 +13,16 @@ const MarketPreview = () => {
     const fetchPreview = async () => {
       try {
         const { data } = await api.get('/listings?limit=5');
-        setPreviewData(data.slice(0, 5));
-      } catch (err) { 
-        console.error("Failed to load preview"); 
+        // Safely extract array — handle plain array or wrapped { listings: [] }
+        const list = Array.isArray(data)
+          ? data
+          : Array.isArray(data?.listings)
+          ? data.listings
+          : [];
+        setPreviewData(list.slice(0, 5));
+      } catch (err) {
+        console.error("Failed to load preview");
+        setPreviewData([]); // ensure it stays an array on error
       } finally {
         setLoading(false);
       }
@@ -77,6 +84,12 @@ const MarketPreview = () => {
                       <td className="p-6 text-right pr-8"><div className="h-9 bg-slate-100 rounded-lg w-24 ml-auto"></div></td>
                     </tr>
                   ))
+                ) : previewData.length === 0 ? (
+                  <tr>
+                    <td colSpan={4} className="p-10 text-center text-slate-400 text-sm">
+                      No listings available at the moment.
+                    </td>
+                  </tr>
                 ) : (
                   previewData.map((site, i) => (
                     <tr key={i} className="hover:bg-slate-50/50 transition-colors group">
@@ -102,7 +115,7 @@ const MarketPreview = () => {
                         <div className="flex gap-5">
                           <div className="flex items-center gap-1.5 font-medium text-slate-600 text-[13px]">
                             <TrendingUp size={14} className="text-emerald-500" /> 
-                            {site.traffic.toLocaleString()}
+                            {site.traffic?.toLocaleString?.() ?? site.traffic}
                           </div>
                           <div className="flex items-center gap-1.5 font-medium text-slate-600 text-[13px]">
                             <ShieldCheck size={14} className="text-blue-500" /> 
