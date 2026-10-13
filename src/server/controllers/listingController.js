@@ -1,9 +1,14 @@
 import { Readable } from 'stream';
 import csv from 'csv-parser';
 import Listing from '../models/Listing';
+import Order from '../models/Order';
 import User from '../models/User';
 import logActivity from '../logger';
 import { json, readBody } from '../http';
+
+// Deleted listings are kept for order history but hidden everywhere else.
+const notDeleted = { isDeleted: { $ne: true } };
+const findLiveListing = (id) => Listing.findOne({ _id: id, ...notDeleted });
 
 export const createListing = async (request, params, user) => {
   try {
@@ -36,7 +41,7 @@ export const getListings = async (request) => {
       sort
     } = query_;
 
-    let query = { status: "approved" };
+    let query = { status: "approved", ...notDeleted };
 
     // Listings of suspended sellers are hidden from the marketplace.
     const suspendedSellers = await User.find({ isSuspended: true }).distinct('_id');
@@ -81,7 +86,7 @@ export const getListings = async (request) => {
 
 export const approveListing = async (request, params, user) => {
   try {
-    const listing = await Listing.findById(params.id);
+    const listing = await findLiveListing(params.id);
     if (listing) {
       listing.status = "approved";
       const updatedListing = await listing.save();
@@ -97,7 +102,7 @@ export const approveListing = async (request, params, user) => {
 
 export const getAdminListings = async () => {
   try {
-    const listings = await Listing.find({})
+    const listings = await Listing.find(notDeleted)
       .populate('seller', 'name email')
       .sort({ createdAt: -1 });
     return json(listings, 200);
@@ -114,7 +119,7 @@ export const updateListingStatus = async (request, params) => {
       return json({ message: 'Invalid status' }, 400);
     }
 
-    const listing = await Listing.findById(params.id);
+    const listing = await findLiveListing(params.id);
 
     if (listing) {
       listing.status = status;
@@ -165,7 +170,7 @@ export const bulkUploadListings = async (request, params, user) => {
 
 export const getMyListings = async (request, params, user) => {
   try {
-    const listings = await Listing.find({ seller: user.id }).sort({ createdAt: -1 });
+    const listings = await Listing.find({ seller: user.id, ...notDeleted }).sort({ createdAt: -1 });
 
     // Calculate quick stats for the seller
     const totalListings = listings.length;
@@ -183,7 +188,7 @@ export const getMyListings = async (request, params, user) => {
 
 export const updateListing = async (request, params, user) => {
   try {
-    const listing = await Listing.findById(params.id);
+    const listing = await findLiveListing(params.id);
 
     if (!listing) {
       return json({ message: 'Listing not found' }, 404);
@@ -222,13 +227,47 @@ export const updateListing = async (request, params, user) => {
 
 export const getListingById = async (request, params) => {
   try {
-    const listing = await Listing.findById(params.id).populate('seller', 'name email');
+    const listing = await findLiveListing(params.id).populate('seller', 'name email');
 
     if (listing) {
       return json(listing);
     } else {
       return json({ message: 'Listing not found' }, 404);
     }
+  } catch (error) {
+    return json({ message: error.message }, 500);
+  }
+};
+
+// DELETE /api/listings/:id: the owner (or an admin) removes a website.
+export const deleteListing = async (request, params, user) => {
+  try {
+    const listing = await findLiveListing(params.id);
+
+    if (!listing) {
+      return json({ message: 'Listing not found' }, 404);
+    }
+
+    if (listing.seller.toString() !== user.id && user.role !== 'admin') {
+      return json({ message: 'Not authorized to delete this listing' }, 401);
+    }
+
+    const openOrders = await Order.countDocuments({
+      listing: listing._id,
+      status: { $in: ['awaiting_content', 'in_progress'] },
+    });
+    if (openOrders > 0) {
+      return json({ message: 'This website has open orders. Complete or reject them before deleting it.' }, 400);
+    }
+
+    listing.isDeleted = true;
+    listing.deletedAt = new Date();
+    listing.isFeatured = false;
+    await listing.save();
+
+    await logActivity(user.id, "LISTING_DELETED", listing._id, `Deleted ${listing.url}`);
+
+    return json({ message: 'Listing deleted' });
   } catch (error) {
     return json({ message: error.message }, 500);
   }

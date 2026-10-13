@@ -33,7 +33,7 @@ export const getPublicSellerProfile = async (request, params) => {
       return json({ message: 'Seller not found' }, 404);
     }
 
-    const listings = await Listing.find({ seller: params.id, status: 'approved' });
+    const listings = await Listing.find({ seller: params.id, status: 'approved', isDeleted: { $ne: true } });
 
     const reviews = await Review.find({ seller: params.id }).populate('buyer', 'name');
 

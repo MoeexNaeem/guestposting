@@ -10,7 +10,7 @@ export const createOrder = async (request, params, user) => {
     const { listingId } = await readBody(request);
 
     const listing = await Listing.findById(listingId);
-    if (!listing) {
+    if (!listing || listing.isDeleted) {
       return json({ message: 'Listing not found' }, 404);
     }
 

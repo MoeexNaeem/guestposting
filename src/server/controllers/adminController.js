@@ -8,7 +8,7 @@ import { json, readBody } from '../http';
 export const getPlatformStats = async () => {
   try {
     const totalUsers = await User.countDocuments();
-    const totalListings = await Listing.countDocuments();
+    const totalListings = await Listing.countDocuments({ isDeleted: { $ne: true } });
     const totalOrders = await Order.countDocuments();
 
     const orders = await Order.find({ status: 'published' });
@@ -69,7 +69,7 @@ export const updateUserByAdmin = async (request, params, authUser) => {
 export const toggleFeaturedListing = async (request, params, authUser) => {
   try {
     const listing = await Listing.findById(params.id);
-    if (!listing) return json({ message: 'Listing not found' }, 404);
+    if (!listing || listing.isDeleted) return json({ message: 'Listing not found' }, 404);
 
     listing.isFeatured = !listing.isFeatured;
     if (listing.isFeatured) {
@@ -85,7 +85,7 @@ export const toggleFeaturedListing = async (request, params, authUser) => {
 export const verifyListingMetrics = async (request, params, authUser) => {
   try {
     const listing = await Listing.findById(params.id);
-    if (listing) {
+    if (listing && !listing.isDeleted) {
       listing.isVerified = true;
       listing.lastVerifiedAt = Date.now();
       await listing.save();

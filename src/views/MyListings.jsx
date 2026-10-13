@@ -51,7 +51,7 @@ const MyListings = () => {
       showNotification('success', "Website removed from inventory.");
       await fetchMyInventory(true); // Silent refresh
     } catch (err) { 
-      showNotification('error', "Action failed. Please try again."); 
+      showNotification('error', err.response?.data?.message || "Action failed. Please try again.");
     } finally {
       setProcessingId(null);
     }

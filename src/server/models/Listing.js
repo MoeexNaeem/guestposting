@@ -22,6 +22,10 @@ const listingSchema = new mongoose.Schema(
     isFeatured: { type: Boolean, default: false },
     featuredUntil: { type: Date },
     lastVerifiedAt: { type: Date },
+    // Soft delete: past orders keep pointing at the listing, so it is hidden
+    // everywhere instead of being removed.
+    isDeleted: { type: Boolean, default: false },
+    deletedAt: { type: Date },
   },
   { timestamps: true },
 );
