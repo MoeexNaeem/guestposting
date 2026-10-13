@@ -5,9 +5,17 @@ import User from '../models/User';
 import sendEmail from '../sendEmail';
 import { json, readBody } from '../http';
 
+// Only the order's buyer and seller may read or write its chat.
+const isParticipant = (order, user) =>
+  order.buyer.toString() === user.id || order.seller.toString() === user.id;
+
 export const sendMessage = async (request, params, user) => {
   try {
     const { orderId, text } = await readBody(request);
+
+    const order = await Order.findById(orderId).populate('listing', 'url');
+    if (!order) return json({ message: 'Order not found' }, 404);
+    if (!isParticipant(order, user)) return json({ message: 'Not authorized' }, 401);
 
     const message = await Message.create({
       order: orderId,
@@ -16,9 +24,6 @@ export const sendMessage = async (request, params, user) => {
     });
 
     const populatedMessage = await message.populate('sender', 'name role');
-    const order = await Order.findById(orderId).populate('listing', 'url');
-
-    if (!order) return json({ message: 'Order not found' }, 404);
 
     const recipientId = order.buyer.toString() === user.id ? order.seller : order.buyer;
     const recipient = await User.findById(recipientId);
@@ -61,8 +66,12 @@ export const sendMessage = async (request, params, user) => {
   }
 };
 
-export const getOrderMessages = async (request, params) => {
+export const getOrderMessages = async (request, params, user) => {
   try {
+    const order = await Order.findById(params.orderId).select('buyer seller');
+    if (!order) return json({ message: 'Order not found' }, 404);
+    if (!isParticipant(order, user)) return json({ message: 'Not authorized' }, 401);
+
     const messages = await Message.find({ order: params.orderId })
       .populate('sender', 'name role')
       .sort({ createdAt: 1 });
