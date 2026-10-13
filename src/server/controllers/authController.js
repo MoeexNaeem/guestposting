@@ -16,11 +16,13 @@ export const registerUser = async (request) => {
     const salt = await bcrypt.genSalt(10);
     const hashedPassword = await bcrypt.hash(password, salt);
 
+    // Sign-up can only create buyers or sellers. Admins are made from the
+    // admin User Management page, never from a public request.
     const user = await User.create({
       name,
       email,
       password: hashedPassword,
-      role: role || 'buyer',
+      role: role === 'seller' ? 'seller' : 'buyer',
     });
 
     if (user) {
