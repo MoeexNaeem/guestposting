@@ -32,6 +32,7 @@ export const getPublicSellerProfile = async (request, params) => {
     if (!seller || seller.role !== 'seller' || seller.isSuspended) {
       return json({ message: 'Seller not found' }, 404);
     }
+    seller.isSuspended = undefined; // only needed for the check above, not public
 
     const listings = await Listing.find({ seller: params.id, status: 'approved', isDeleted: { $ne: true } });
 
