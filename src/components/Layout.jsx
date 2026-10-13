@@ -3,7 +3,6 @@
 import React, { useState, useEffect } from "react";
 import Link from 'next/link';
 import { useRouter, usePathname } from 'next/navigation';
-import { getSocket } from "@/lib/socket";
 import api from '@/lib/api';
 import {
   Globe,
@@ -30,29 +29,44 @@ const Layout = ({ children }) => {
   const [showNotifs, setShowNotifs] = useState(false);
   const [liveToast, setLiveToast] = useState(null);
   const userInfo = JSON.parse(localStorage.getItem("userInfo"));
+  const userId = userInfo?._id;
 
+  // Notifications are refreshed every few seconds while the tab is visible;
+  // a newly arrived chat message pops the live toast.
   useEffect(() => {
-    const socket = getSocket();
-    if (userInfo) {
-      socket.emit("identify", userInfo._id);
-      fetchNotifs();
-    }
-    socket.on("new_notification", (notif) => {
-      setNotifications((prev) => [notif, ...prev]);
-      setLiveToast(notif);
-      setTimeout(() => setLiveToast(null), 5000);
-    });
-    return () => socket.off("new_notification");
-  }, [userInfo?._id]);
+    if (!userId) return;
+    let seen = null;
+    let stopped = false;
 
-  const fetchNotifs = async () => {
-    try {
-      const { data } = await api.get("/notifications");
-      setNotifications(data);
-    } catch (err) {
-      console.error("Error fetching notifications");
-    }
-  };
+    const fetchNotifs = async () => {
+      if (document.hidden) return;
+      try {
+        const { data } = await api.get("/notifications");
+        if (stopped) return;
+        if (seen) {
+          const fresh = data.find((n) => !seen.has(n._id) && n.type === "message" && !n.isRead);
+          if (fresh) {
+            setLiveToast(fresh);
+            setTimeout(() => setLiveToast(null), 5000);
+          }
+        }
+        seen = new Set(data.map((n) => n._id));
+        setNotifications((prev) => (JSON.stringify(prev) === JSON.stringify(data) ? prev : data));
+      } catch (err) {
+        console.error("Error fetching notifications");
+      }
+    };
+
+    fetchNotifs();
+    const timer = setInterval(fetchNotifs, 5000);
+    const onVisible = () => { if (!document.hidden) fetchNotifs(); };
+    document.addEventListener("visibilitychange", onVisible);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+      document.removeEventListener("visibilitychange", onVisible);
+    };
+  }, [userId]);
 
   // --- NEW: NOTIFICATION HANDLERS ---
   const handleNotifClick = async (notif) => {

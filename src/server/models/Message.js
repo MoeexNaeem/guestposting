@@ -22,4 +22,7 @@ const messageSchema = new mongoose.Schema(
   }
 );
 
+// Open order chats poll this query every few seconds.
+messageSchema.index({ order: 1, createdAt: 1 });
+
 export default mongoose.models.Message || mongoose.model('Message', messageSchema);

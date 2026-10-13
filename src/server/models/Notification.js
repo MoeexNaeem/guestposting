@@ -30,4 +30,7 @@ const notificationSchema = new mongoose.Schema(
   { timestamps: true }
 );
 
+// The notification bell polls this query every few seconds.
+notificationSchema.index({ recipient: 1, createdAt: -1 });
+
 export default mongoose.models.Notification || mongoose.model('Notification', notificationSchema);

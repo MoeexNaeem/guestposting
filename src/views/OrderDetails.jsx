@@ -3,7 +3,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter, useParams } from 'next/navigation';
-import { getSocket } from '@/lib/socket';
 import api from '@/lib/api';
 import { 
   ArrowLeft, FileText, Send, Clock, CheckCircle2, Star,
@@ -39,7 +38,6 @@ const OrderDetails = () => {
   };
 
   useEffect(() => {
-    const socket = getSocket();
     const init = async () => {
       try {
         const { data: o } = await api.get(`/orders/${id}`);
@@ -54,13 +52,42 @@ const OrderDetails = () => {
           } catch (err) { console.log("No previous reviews"); }
         }
         setLoading(false);
-        socket.emit("join_order", id);
       } catch (err) { router.push('/orders'); }
     };
     init();
-    socket.on("receive_message", (data) => setMessages((prev) => [...prev, data]));
-    return () => socket.off("receive_message");
   }, [id, router]);
+
+  // The other party's new messages are picked up every few seconds while the
+  // tab is visible. Only unseen messages are merged in, so an unchanged list
+  // never re-renders (and never moves the chat scroll).
+  useEffect(() => {
+    if (loading) return;
+    let stopped = false;
+
+    const pollMessages = async () => {
+      if (document.hidden) return;
+      try {
+        const { data } = await api.get(`/messages/${id}`);
+        if (stopped) return;
+        setMessages((prev) => {
+          const have = new Set(prev.map((m) => m._id));
+          if (data.every((m) => have.has(m._id))) return prev;
+          const ids = new Set(data.map((m) => m._id));
+          // keep messages still being sent (or just sent) that this response predates
+          return [...data, ...prev.filter((m) => !ids.has(m._id))];
+        });
+      } catch (err) { /* keep the current list; try again on the next tick */ }
+    };
+
+    const timer = setInterval(pollMessages, 3000);
+    const onVisible = () => { if (!document.hidden) pollMessages(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      stopped = true;
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [id, loading]);
 
   // FIX: Stable scroll logic (prevents the whole screen from jumping)
   useEffect(() => {
@@ -84,13 +111,10 @@ const OrderDetails = () => {
     setNewMessage('');
     try {
       const { data } = await api.post('/messages', { orderId: id, text: textToSend });
-      getSocket().emit("send_message", {
-        ...data, 
-        orderId: id, 
-        recipientId: userInfo._id === order.buyer._id ? order.seller._id : order.buyer._id,
-        notificationText: `New message on ${order.listing.url}` 
-      });
-      setMessages((prev) => prev.map(msg => msg._id === tempId ? data : msg));
+      // If a refresh already brought the saved message in, just drop the placeholder.
+      setMessages((prev) => prev.some(msg => msg._id === data._id)
+        ? prev.filter(msg => msg._id !== tempId)
+        : prev.map(msg => msg._id === tempId ? data : msg));
     } catch (err) { 
       setMessages((prev) => prev.filter(msg => msg._id !== tempId));
       setNewMessage(textToSend);
