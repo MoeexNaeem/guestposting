@@ -70,6 +70,7 @@ export const getListings = async (request) => {
     }
 
     let sortObj = { isFeatured: -1, createdAt: -1 };
+    if (sort === 'price_asc') sortObj = { price: 1 };
     if (sort === 'price_desc') sortObj = { price: -1 };
     if (sort === 'da_desc') sortObj = { da: -1 };
     if (sort === 'traffic_desc') sortObj = { traffic: -1 };
