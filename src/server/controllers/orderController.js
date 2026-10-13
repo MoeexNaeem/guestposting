@@ -82,11 +82,13 @@ export const getOrderById = async (request, params, user) => {
   }
 };
 
-// PUT /api/orders/:id/content. In the Express router this path was
-// registered twice; the first handler (this one) always answered.
+const escapeHtml = (value) =>
+  String(value).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+
+// PUT /api/orders/:id/content: the buyer submits the brief.
 export const updateOrderContent = async (request, params, user) => {
   try {
-    const { targetUrl, anchorText } = await readBody(request);
+    const { targetUrl, anchorText, articleLink, contentNotes } = await readBody(request);
     const order = await Order.findById(params.id);
 
     if (order) {
@@ -94,8 +96,16 @@ export const updateOrderContent = async (request, params, user) => {
         return json({ message: 'Not authorized' }, 401);
       }
 
+      // Once work has started (or the order is closed) the brief is locked;
+      // re-opening a published order would let it be delivered and paid twice.
+      if (order.status !== 'awaiting_content') {
+        return json({ message: 'Requirements can only be submitted while the order is awaiting content.' }, 400);
+      }
+
       order.targetUrl = targetUrl;
       order.anchorText = anchorText;
+      if (articleLink) order.articleLink = articleLink;
+      if (contentNotes) order.contentNotes = contentNotes;
       order.status = 'in_progress';
 
       const updatedOrder = await order.save();
@@ -117,6 +127,10 @@ export const rejectOrder = async (request, params, user) => {
     // Only the seller can reject the order
     if (order.seller.toString() !== user.id) {
       return json({ message: 'Not authorized' }, 401);
+    }
+
+    if (!['awaiting_content', 'in_progress'].includes(order.status)) {
+      return json({ message: 'Only open orders can be rejected.' }, 400);
     }
 
     order.status = 'cancelled';
@@ -146,16 +160,28 @@ export const rejectOrder = async (request, params, user) => {
   }
 };
 
-// PUT /api/orders/:id/publish. Same double registration as /content in
-// Express; this first handler is the one that ran.
+// PUT /api/orders/:id/publish: the seller delivers the live link and is paid.
 export const markOrderPublished = async (request, params, user) => {
   try {
+    const { liveLink } = (await readBody(request)) || {};
     const order = await Order.findById(params.id).populate('listing', 'url');
     if (!order) return json({ message: 'Order not found' }, 404);
     if (order.seller.toString() !== user.id) return json({ message: 'Not authorized' }, 401);
+    if (!liveLink) return json({ message: 'Please provide the live URL of the published post.' }, 400);
 
-    order.status = 'published';
-    const updatedOrder = await order.save();
+    // Only an in-progress order can be published, and the status check is
+    // part of the update itself so a double submit can't pay the seller twice.
+    const updatedOrder = await Order.findOneAndUpdate(
+      { _id: order._id, status: 'in_progress' },
+      { $set: { status: 'published', liveLink } },
+      { new: true }
+    ).populate('listing', 'url');
+    if (!updatedOrder) {
+      return json({ message: 'Only orders in progress can be marked as published.' }, 400);
+    }
+
+    await User.updateOne({ _id: order.seller }, { $inc: { balance: order.price } });
+
     const buyer = await User.findById(order.buyer);
 
     await Notification.create({
@@ -171,7 +197,7 @@ export const markOrderPublished = async (request, params, user) => {
         await sendEmail({
           email: buyer.email,
           subject: `Your Guest Post is LIVE! - ${order.listing.url}`,
-          html: `<h2 style="color: #10b981;">Great News!</h2><p>Your order for <strong>${order.listing.url}</strong> is live.</p>`
+          html: `<h2 style="color: #10b981;">Great News!</h2><p>Your order for <strong>${order.listing.url}</strong> is live.</p><p>Live link: ${escapeHtml(liveLink)}</p>`
         });
       } catch (mailErr) { console.log("Email failed"); }
     }
