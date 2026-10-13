@@ -1,6 +1,7 @@
 import { Readable } from 'stream';
 import csv from 'csv-parser';
 import Listing from '../models/Listing';
+import User from '../models/User';
 import logActivity from '../logger';
 import { json, readBody } from '../http';
 
@@ -36,6 +37,10 @@ export const getListings = async (request) => {
     } = query_;
 
     let query = { status: "approved" };
+
+    // Listings of suspended sellers are hidden from the marketplace.
+    const suspendedSellers = await User.find({ isSuspended: true }).distinct('_id');
+    if (suspendedSellers.length) query.seller = { $nin: suspendedSellers };
 
     if (search) query.url = { $regex: search, $options: 'i' };
 

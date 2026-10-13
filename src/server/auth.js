@@ -15,6 +15,9 @@ export const protect = async (request) => {
       const decoded = jwt.verify(token, process.env.JWT_SECRET);
       const user = await User.findById(decoded.id).select('-password');
       if (!user) throw new Error('User not found');
+      if (user.isSuspended) {
+        return { error: json({ message: 'Your account has been suspended.', suspended: true }, 403) };
+      }
       return { user };
     } catch (error) {
       return { error: json({ message: 'Not authorized, token failed' }, 401) };

@@ -18,6 +18,11 @@ export const createOrder = async (request, params, user) => {
       return json({ message: 'You cannot buy your own listing' }, 400);
     }
 
+    const listingSeller = await User.findById(listing.seller).select('isSuspended');
+    if (!listingSeller || listingSeller.isSuspended) {
+      return json({ message: 'This listing is currently unavailable.' }, 400);
+    }
+
     const order = await Order.create({
       listing: listing._id,
       buyer: user.id,

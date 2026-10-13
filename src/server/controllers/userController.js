@@ -28,8 +28,8 @@ export const getUserProfile = async (request, params, authUser) => {
 
 export const getPublicSellerProfile = async (request, params) => {
   try {
-    const seller = await User.findById(params.id).select('name createdAt role');
-    if (!seller || seller.role !== 'seller') {
+    const seller = await User.findById(params.id).select('name createdAt role isSuspended');
+    if (!seller || seller.role !== 'seller' || seller.isSuspended) {
       return json({ message: 'Seller not found' }, 404);
     }
 

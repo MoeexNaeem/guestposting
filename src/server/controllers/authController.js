@@ -48,6 +48,9 @@ export const loginUser = async (request) => {
     const user = await User.findOne({ email }).select('+password');
 
     if (user && (await bcrypt.compare(password, user.password))) {
+      if (user.isSuspended) {
+        return json({ message: 'Your account has been suspended. Please contact support.' }, 403);
+      }
       return json({
         _id: user.id,
         name: user.name,

@@ -46,6 +46,9 @@ export const getAllUsers = async () => {
 export const updateUserByAdmin = async (request, params, authUser) => {
   try {
     const { role, isSuspended } = await readBody(request);
+    if (isSuspended === true && params.id === authUser.id) {
+      return json({ message: "You can't suspend your own account." }, 400);
+    }
     const user = await User.findById(params.id);
 
     if (user) {

@@ -17,4 +17,16 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+// A suspended account is signed out as soon as any request is refused.
+api.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response?.status === 403 && error.response.data?.suspended) {
+      localStorage.removeItem('userInfo');
+      window.location.href = '/login';
+    }
+    return Promise.reject(error);
+  }
+);
+
 export default api;
